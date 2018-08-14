@@ -1,0 +1,519 @@
+#ifndef _ALPHA_UNISTD_H
+
+
+2
+
+#define _ALPHA_UNISTD_H
+
+
+3
+
+ 
+
+
+4
+
+#define __NR_osf_syscall	  0	/* not implemented */
+
+
+5
+
+#define __NR_exit		  1
+
+
+6
+
+#define __NR_fork		  2
+
+
+7
+
+#define __NR_read		  3
+
+
+8
+
+#define __NR_write		  4
+
+
+9
+
+#define __NR_osf_old_open	  5	/* not implemented */
+
+
+10
+
+#define __NR_close		  6
+
+
+11
+
+#define __NR_osf_wait4		  7
+
+
+12
+
+#define __NR_osf_old_creat	  8	/* not implemented */
+
+
+13
+
+#define __NR_link		  9
+
+
+14
+
+#define __NR_unlink		 10
+
+
+15
+
+#define __NR_osf_execve		 11	/* not implemented */
+
+
+16
+
+#define __NR_chdir		 12
+
+
+17
+
+#define __NR_fchdir		 13
+
+
+18
+
+#define __NR_mknod		 14
+
+
+19
+
+#define __NR_chmod		 15
+
+
+20
+
+#define __NR_chown		 16
+
+
+21
+
+#define __NR_brk		 17
+
+
+22
+
+#define __NR_osf_getfsstat	 18	/* not implemented */
+
+
+23
+
+#define __NR_lseek		 19
+
+
+24
+
+#define __NR_getxpid		 20
+
+
+25
+
+#define __NR_osf_mount		 21
+
+
+26
+
+#define __NR_umount		 22
+
+
+27
+
+#define __NR_setuid		 23
+
+
+28
+
+#define __NR_getxuid		 24
+
+
+29
+
+#define __NR_exec_with_loader	 25	/* not implemented */
+
+
+30
+
+#define __NR_ptrace		 26
+
+
+31
+
+#define __NR_osf_nrecvmsg	 27	/* not implemented */
+
+
+32
+
+#define __NR_osf_nsendmsg	 28	/* not implemented */
+
+
+33
+
+#define __NR_osf_nrecvfrom	 29	/* not implemented */
+
+
+34
+
+#define __NR_osf_naccept	 30	/* not implemented */
+
+
+35
+
+#define __NR_osf_ngetpeername	 31	/* not implemented */
+
+
+36
+
+#define __NR_osf_ngetsockname	 32	/* not implemented */
+
+
+37
+
+#define __NR_access		 33
+
+
+38
+
+#define __NR_osf_chflags	 34	/* not implemented */
+
+
+39
+
+#define __NR_osf_fchflags	 35	/* not implemented */
+
+
+40
+
+#define __NR_sync		 36
+
+
+41
+
+#define __NR_kill		 37
+
+
+42
+
+#define __NR_osf_old_stat	 38	/* not implemented */
+
+
+43
+
+#define __NR_setpgid		 39
+
+
+44
+
+#define __NR_osf_old_lstat	 40	/* not implemented */
+
+
+45
+
+#define __NR_dup		 41
+
+
+46
+
+#define __NR_pipe		 42
+
+
+47
+
+#define __NR_osf_set_program_attributes	43
+
+
+48
+
+#define __NR_osf_profil		 44	/* not implemented */
+
+
+49
+
+#define __NR_open		 45
+
+
+50
+
+#define __NR_osf_old_sigaction	 46	/* not implemented */
+
+
+51
+
+#define __NR_getxgid		 47
+
+
+52
+
+#define __NR_osf_sigprocmask	 48
+
+
+53
+
+#define __NR_osf_getlogin	 49	/* not implemented */
+
+
+54
+
+#define __NR_osf_setlogin	 50	/* not implemented */
+
+
+55
+
+#define __NR_acct		 51
+
+
+56
+
+#define __NR_sigpending		 52
+
+
+57
+
+ 
+
+
+58
+
+#define __NR_ioctl		 54
+
+
+59
+
+#define __NR_osf_reboot		 55	/* not implemented */
+
+
+60
+
+#define __NR_osf_revoke		 56	/* not implemented */
+
+
+61
+
+#define __NR_symlink		 57
+
+
+62
+
+#define __NR_readlink		 58
+
+
+63
+
+#define __NR_execve		 59
+
+
+64
+
+#define __NR_umask		 60
+
+
+65
+
+#define __NR_chroot		 61
+
+
+66
+
+#define __NR_osf_old_fstat	 62	/* not implemented */
+
+
+67
+
+#define __NR_getpgrp		 63
+
+
+68
+
+#define __NR_getpagesize	 64
+
+
+69
+
+#define __NR_osf_mremap		 65	/* not implemented */
+
+
+70
+
+#define __NR_vfork		 66
+
+
+71
+
+#define __NR_stat		 67
+
+
+72
+
+#define __NR_lstat		 68
+
+
+73
+
+#define __NR_osf_sbrk		 69	/* not implemented */
+
+
+74
+
+#define __NR_osf_sstk		 70	/* not implemented */
+
+
+75
+
+#define __NR_mmap		 71	/* OSF/1 mmap is superset of Linux */
+
+
+76
+
+#define __NR_osf_old_vadvise	 72	/* not implemented */
+
+
+77
+
+#define __NR_munmap		 73
+
+
+78
+
+#define __NR_mprotect		 74
+
+
+79
+
+#define __NR_madvise		 75
+
+
+80
+
+#define __NR_vhangup		 76
+
+
+81
+
+#define __NR_osf_kmodcall	 77	/* not implemented */
+
+
+82
+
+#define __NR_osf_mincore	 78	/* not implemented */
+
+
+83
+
+#define __NR_getgroups		 79
+
+
+84
+
+#define __NR_setgroups		 80
+
+
+85
+
+#define __NR_osf_old_getpgrp	 81	/* not implemented */
+
+
+86
+
+#define __NR_setpgrp		 82	/* BSD alias for setpgid */
+
+
+87
+
+#define __NR_osf_setitimer	 83
+
+
+88
+
+#define __NR_osf_old_wait	 84	/* not implemented */
+
+
+89
+
+#define __NR_osf_table		 85	/* not implemented */
+
+
+90
+
+#define __NR_osf_getitimer	 86
+
+
+91
+
+#define __NR_gethostname	 87
+
+
+92
+
+#define __NR_sethostname	 88
+
+
+93
+
+#define __NR_getdtablesize	 89
+
+
+94
+
+#define __NR_dup2		 90
+
+
+95
+
+#define __NR_fstat		 91
+
+
+96
+
+#define __NR_fcntl		 92
+
+
+97
+
+#define __NR_osf_select		 93
+
+
+98
+
+#define __NR_poll		 94
+
+
+99
+
+#define __NR_fsync		 95
+
+
+100
+
+#define __NR_setpriority	 96
+
+
+101
+
+#define __NR_socket		 97
+
+
+102
+
+#define __NR_connect		 98
+
+
+103
+
+#define __NR_accept		 99
+
+
+104
+
+#define __NR_getpriority	100
+
+
+
