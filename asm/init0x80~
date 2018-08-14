@@ -1,0 +1,234 @@
+系统调用是一个软中断，中断号是0x80，它是上层应用程序与Linux系统内核进行交互通信的唯一接口。
+这个中断的设置在kernel/sched.c中441行函数中
+void sched_init(void)  
+02. {  
+03.     int i;  
+04.     struct desc_struct * p;  
+05.   
+06.     if (sizeof(struct sigaction) != 16)  
+07.         panic("Struct sigaction MUST be 16 bytes");  
+08.     set_tss_desc(gdt+FIRST_TSS_ENTRY,&(init_task.task.tss));  
+09.     set_ldt_desc(gdt+FIRST_LDT_ENTRY,&(init_task.task.ldt));  
+10.     p = gdt+2+FIRST_TSS_ENTRY;  
+11.     for(i=1;i<NR_TASKS;i++) {  
+12.         task[i] = NULL;  
+13.         p->a=p->b=0;  
+14.         p++;  
+15.         p->a=p->b=0;  
+16.         p++;  
+17.     }  
+18. /* Clear NT, so that we won't have troubles with that later on */  
+19.     __asm__("pushfl ; andl $0xffffbfff,(%esp) ; popfl");  
+20.     ltr(0);  
+21.     lldt(0);  
+22.     outb_p(0x36,0x43);      /* binary, mode 3, LSB/MSB, ch 0 */  
+23.     outb_p(LATCH & 0xff , 0x40);    /* LSB */  
+24.     outb(LATCH >> 8 , 0x40);  /* MSB */  
+25.     set_intr_gate(0x20,&timer_interrupt);  
+26.     outb(inb_p(0x21)&~0x01,0x21);  
+27.     set_system_gate(0x80,&system_call);  
+28. }  
+
+最后一句就将0x80中断与system_call（系统调用）联系起来。 
+通过int 0x80，就可使用内核资源。
+通常应用程序都是使用具有标准接口定义的C函数库间接的使用内核的系统调用，即应用程序调用C函数库中的函数，C函数库中再通过int 0x80进行系统调用。    所以，系统调用过程是这样的：
+    应用程序调用libc中的函数－>libc中的函数引用系统调用宏－>系统调用宏中使用int 0x80完成系统调用并返回
+
+下面是sys_call_table的定义文件
+
+位于./include/sys.h
+extern int sys_setup ();    // 系统启动初始化设置函数。 (kernel/blk_drv/hd.c,71)  
+02. extern int sys_exit ();     // 程序退出。 (kernel/exit.c, 137)  
+03. extern int sys_fork ();     // 创建进程。 (kernel/system_call.s, 208)  
+04. extern int sys_read ();     // 读文件。 (fs/read_write.c, 55)  
+05. extern int sys_write ();    // 写文件。 (fs/read_write.c, 83)  
+06. extern int sys_open ();     // 打开文件。 (fs/open.c, 138)  
+07. extern int sys_close ();    // 关闭文件。 (fs/open.c, 192)  
+08. extern int sys_waitpid ();  // 等待进程终止。 (kernel/exit.c, 142)  
+09. extern int sys_creat ();    // 创建文件。 (fs/open.c, 187)  
+10. extern int sys_link ();     // 创建一个文件的硬连接。 (fs/namei.c, 721)  
+11. extern int sys_unlink ();   // 删除一个文件名(或删除文件)。 (fs/namei.c, 663)  
+12. extern int sys_execve ();   // 执行程序。 (kernel/system_call.s, 200)  
+13. extern int sys_chdir ();    // 更改当前目录。 (fs/open.c, 75)  
+14. extern int sys_time ();     // 取当前时间。 (kernel/sys.c, 102)  
+15. extern int sys_mknod ();    // 建立块/字符特殊文件。 (fs/namei.c, 412)  
+16. extern int sys_chmod ();    // 修改文件属性。 (fs/open.c, 105)  
+17. extern int sys_chown ();    // 修改文件宿主和所属组。 (fs/open.c, 121)  
+18. extern int sys_break ();    // (-kernel/sys.c, 21)  
+19. extern int sys_stat ();     // 使用路径名取文件的状态信息。 (fs/stat.c, 36)  
+20. extern int sys_lseek ();    // 重新定位读/写文件偏移。 (fs/read_write.c, 25)  
+21. extern int sys_getpid ();   // 取进程id。 (kernel/sched.c, 348)  
+22. extern int sys_mount ();    // 安装文件系统。 (fs/super.c, 200)  
+23. extern int sys_umount ();   // 卸载文件系统。 (fs/super.c, 167)  
+24. extern int sys_setuid ();   // 设置进程用户id。 (kernel/sys.c, 143)  
+25. extern int sys_getuid ();   // 取进程用户id。 (kernel/sched.c, 358)  
+26. extern int sys_stime ();    // 设置系统时间日期。 (-kernel/sys.c, 148)  
+27. extern int sys_ptrace ();   // 程序调试。 (-kernel/sys.c, 26)  
+28. extern int sys_alarm ();    // 设置报警。 (kernel/sched.c, 338)  
+29. extern int sys_fstat ();    // 使用文件句柄取文件的状态信息。(fs/stat.c, 47)  
+30. extern int sys_pause ();    // 暂停进程运行。 (kernel/sched.c, 144)  
+31. extern int sys_utime ();    // 改变文件的访问和修改时间。 (fs/open.c, 24)  
+32. extern int sys_stty ();     // 修改终端行设置。 (-kernel/sys.c, 31)  
+33. extern int sys_gtty ();     // 取终端行设置信息。 (-kernel/sys.c, 36)  
+34. extern int sys_access ();   // 检查用户对一个文件的访问权限。(fs/open.c, 47)  
+35. extern int sys_nice ();     // 设置进程执行优先权。 (kernel/sched.c, 378)  
+36. extern int sys_ftime ();    // 取日期和时间。 (-kernel/sys.c,16)  
+37. extern int sys_sync ();     // 同步高速缓冲与设备中数据。 (fs/buffer.c, 44)  
+38. extern int sys_kill ();     // 终止一个进程。 (kernel/exit.c, 60)  
+39. extern int sys_rename ();   // 更改文件名。 (-kernel/sys.c, 41)  
+40. extern int sys_mkdir ();    // 创建目录。 (fs/namei.c, 463)  
+41. extern int sys_rmdir ();    // 删除目录。 (fs/namei.c, 587)  
+42. extern int sys_dup ();      // 复制文件句柄。 (fs/fcntl.c, 42)  
+43. extern int sys_pipe ();     // 创建管道。 (fs/pipe.c, 71)  
+44. extern int sys_times ();    // 取运行时间。 (kernel/sys.c, 156)  
+45. extern int sys_prof ();     // 程序执行时间区域。 (-kernel/sys.c, 46)  
+46. extern int sys_brk ();      // 修改数据段长度。 (kernel/sys.c, 168)  
+47. extern int sys_setgid ();   // 设置进程组id。 (kernel/sys.c, 72)  
+48. extern int sys_getgid ();   // 取进程组id。 (kernel/sched.c, 368)  
+49. extern int sys_signal ();   // 信号处理。 (kernel/signal.c, 48)  
+50. extern int sys_geteuid ();  // 取进程有效用户id。 (kenrl/sched.c, 363)  
+51. extern int sys_getegid ();  // 取进程有效组id。 (kenrl/sched.c, 373)  
+52. extern int sys_acct ();     // 进程记帐。 (-kernel/sys.c, 77)  
+53. extern int sys_phys ();     // (-kernel/sys.c, 82)  
+54. extern int sys_lock ();     // (-kernel/sys.c, 87)  
+55. extern int sys_ioctl ();    // 设备控制。 (fs/ioctl.c, 30)  
+56. extern int sys_fcntl ();    // 文件句柄操作。 (fs/fcntl.c, 47)  
+57. extern int sys_mpx ();      // (-kernel/sys.c, 92)  
+58. extern int sys_setpgid ();  // 设置进程组id。 (kernel/sys.c, 181)  
+59. extern int sys_ulimit ();   // (-kernel/sys.c, 97)  
+60. extern int sys_uname ();    // 显示系统信息。 (kernel/sys.c, 216)  
+61. extern int sys_umask ();    // 取默认文件创建属性码。 (kernel/sys.c, 230)  
+62. extern int sys_chroot ();   // 改变根系统。 (fs/open.c, 90)  
+63. extern int sys_ustat ();    // 取文件系统信息。 (fs/open.c, 19)  
+64. extern int sys_dup2 ();     // 复制文件句柄。 (fs/fcntl.c, 36)  
+65. extern int sys_getppid ();  // 取父进程id。 (kernel/sched.c, 353)  
+66. extern int sys_getpgrp ();  // 取进程组id，等于getpgid(0)。(kernel/sys.c, 201)  
+67. extern int sys_setsid ();   // 在新会话中运行程序。 (kernel/sys.c, 206)  
+68. extern int sys_sigaction ();    // 改变信号处理过程。 (kernel/signal.c, 63)  
+69. extern int sys_sgetmask (); // 取信号屏蔽码。 (kernel/signal.c, 15)  
+70. extern int sys_ssetmask (); // 设置信号屏蔽码。 (kernel/signal.c, 20)  
+71. extern int sys_setreuid (); // 设置真实与/或有效用户id。 (kernel/sys.c,118)  
+72. extern int sys_setregid (); // 设置真实与/或有效组id。 (kernel/sys.c, 51)  
+73. // 系统调用函数指针表。用于系统调用中断处理程序(int 0x80)，作为跳转表。  
+74. fn_ptr sys_call_table[] = { sys_setup, sys_exit, sys_fork, sys_read,  
+75.   sys_write, sys_open, sys_close, sys_waitpid, sys_creat, sys_link,  
+76.   sys_unlink, sys_execve, sys_chdir, sys_time, sys_mknod, sys_chmod,  
+77.   sys_chown, sys_break, sys_stat, sys_lseek, sys_getpid, sys_mount,  
+78.   sys_umount, sys_setuid, sys_getuid, sys_stime, sys_ptrace, sys_alarm,  
+79.   sys_fstat, sys_pause, sys_utime, sys_stty, sys_gtty, sys_access,  
+80.   sys_nice, sys_ftime, sys_sync, sys_kill, sys_rename, sys_mkdir,  
+81.   sys_rmdir, sys_dup, sys_pipe, sys_times, sys_prof, sys_brk, sys_setgid,  
+82.   sys_getgid, sys_signal, sys_geteuid, sys_getegid, sys_acct, sys_phys,  
+83.   sys_lock, sys_ioctl, sys_fcntl, sys_mpx, sys_setpgid, sys_ulimit,  
+84.   sys_uname, sys_umask, sys_chroot, sys_ustat, sys_dup2, sys_getppid,  
+85.   sys_getpgrp, sys_setsid, sys_sigaction, sys_sgetmask, sys_ssetmask,  
+86.   sys_setreuid, sys_setregid  
+87. };  
+
+其中sys_call_table的类型是fn_ptr类型，其中sys_call_table[0]元素为sys_setup,它的类型是fn_ptr类型，它实际上是函数sys_setup的
+
+入口地址。
+
+它的定义如下：
+
+typedef int (*fn_ptr) (); // 定义函数指针类型。
+
+下面的实例代码有助于理解函数指针：
+
+[cpp] view plain copy 
+01. #include<stdio.h>  
+02. typedef int (*MyFunc)();  
+03. MyFunc Func1;  
+04. int Func2()  
+05. {  
+06.     printf("This is a sample output!/n");  
+07.     return 0;  
+08. }  
+09. int main()  
+10. {  
+11.     Func1=Func2;  
+12.     //Func2();  
+13.     //(*Func1)();  
+14.     printf("%x/n",(*Func1));  
+15.     printf("%x/n",Func2);  
+16.     return 0;  
+17. }  
+
+system_call系统调用入口函数
+
+
+
+
+
+[cpp] view plain copy 
+
+01. #### int 0x80 --linux 系统调用入口点(调用中断int 0x80，eax 中是调用号)。  
+02. .align 2  
+03. _system_call:  
+04. cmpl $nr_system_calls-1,%eax # 调用号如果超出范围的话就在eax 中置-1 并退出。  
+05. ja bad_sys_call  
+06. push %ds # 保存原段寄存器值。  
+07. push %es  
+08. push %fs  
+09. pushl %edx # ebx,ecx,edx 中放着系统调用相应的C 语言函数的调用参数。  
+10. pushl %ecx # push %ebx,%ecx,%edx as parameters  
+11. pushl %ebx # to the system call  
+12. movl $0x10,%edx # set up ds,es to kernel space  
+13. mov %dx,%ds # ds,es 指向内核数据段(全局描述符表中数据段描述符)。  
+14. mov %dx,%es  
+15. movl $0x17,%edx # fs points to local data space  
+16. mov %dx,%fs # fs 指向局部数据段(局部描述符表中数据段描述符)。  
+17. # 下面这句操作数的含义是：调用地址 = _sys_call_table + %eax * 4。参见列表后的说明。  
+18. # 对应的C 程序中的sys_call_table 在include/linux/sys.h 中，其中定义了一个包括72 个  
+19. # 系统调用C 处理函数的地址数组表。  
+20. call _sys_call_table(,%eax,4)  
+21. pushl %eax # 把系统调用号入栈。  
+22. movl _current,%eax # 取当前任务（进程）数据结构地址??eax。  
+23. # 下面97-100 行查看当前任务的运行状态。如果不在就绪状态(state 不等于0)就去执行调度程序。  
+24. # 如果该任务在就绪状态但counter[??]值等于0，则也去执行调度程序。  
+25. cmpl $0,state(%eax) # state  
+26. jne reschedule  
+27. cmpl $0,counter(%eax) # counter  
+28. je reschedule  
+29. # 以下这段代码执行从系统调用C 函数返回后，对信号量进行识别处理。  
+30. ret_from_sys_call:  
+31. # 首先判别当前任务是否是初始任务task0，如果是则不必对其进行信号量方面的处理，直接返回。  
+32. # 103 行上的_task 对应C 程序中的task[]数组，直接引用task 相当于引用task[0]。  
+33. movl _current,%eax # task[0] cannot have signals  
+34. cmpl _task,%eax  
+35. je 3f # 向前(forward)跳转到标号3。  
+36. # 通过对原调用程序代码选择符的检查来判断调用程序是否是超级用户。如果是超级用户就直接  
+37. # 退出中断，否则需进行信号量的处理。这里比较选择符是否为普通用户代码段的选择符0x000f  
+38. # (RPL=3，局部表，第1 个段(代码段))，如果不是则跳转退出中断程序。  
+39. cmpw $0x0f,CS(%esp) # was old code segment supervisor ?  
+40. jne 3f  
+41. # 如果原堆栈段选择符不为0x17（也即原堆栈不在用户数据段中），则也退出。  
+42. cmpw $0x17,OLDSS(%esp) # was stack segment = 0x17 ?  
+43. jne 3f  
+44. # 下面这段代码（109-120）的用途是首先取当前任务结构中的信号位图(32 位，每位代表1 种信号)，  
+45. # 然后用任务结构中的信号阻塞（屏蔽）码，阻塞不允许的信号位，取得数值最小的信号值，再把  
+46. # 原信号位图中该信号对应的位复位（置0），最后将该信号值作为参数之一调用do_signal()。  
+47. # do_signal()在（kernel/signal.c,82）中，其参数包括13 个入栈的信息。  
+48. movl signal(%eax),%ebx # 取信号位图??ebx，每1 位代表1 种信号，共32 个信号。  
+49. movl blocked(%eax),%ecx # 取阻塞（屏蔽）信号位图??ecx。  
+50. notl %ecx # 每位取反。  
+51. andl %ebx,%ecx # 获得许可的信号位图。  
+52. bsfl %ecx,%ecx # 从低位（位0）开始扫描位图，看是否有1 的位，  
+53. # 若有，则ecx 保留该位的偏移值（即第几位0-31）。  
+54. je 3f # 如果没有信号则向前跳转退出。  
+55. btrl %ecx,%ebx # 复位该信号（ebx 含有原signal 位图）。  
+56. movl %ebx,signal(%eax) # 重新保存signal 位图信息??current->signal。  
+57. incl %ecx # 将信号调整为从1 开始的数(1-32)。  
+58. pushl %ecx # 信号值入栈作为调用do_signal 的参数之一。  
+59. call _do_signal # 调用C 函数信号处理程序(kernel/signal.c,82)  
+60. popl %eax # 弹出信号值。  
+61. 3: popl %eax  
+62. popl %ebx  
+63. popl %ecx  
+64. popl %edx  
+65. pop %fs  
+66. pop %es  
+67. pop %ds  
+68. iret  
+
+

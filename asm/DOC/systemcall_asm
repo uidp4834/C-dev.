@@ -1,0 +1,61 @@
+这是一系列宏，它们的定义在unistd.h中，基本形式为＃define _NR_name value，name为系统函数名字，value是一个整数值，是name所对应的系统函数指针在sys_call_table中的偏移量。
+系统调用宏也在本文件内定义，采用内联汇编，如下：
+// 以下定义系统调用嵌入式汇编宏函数。  
+02. // 不带参数的系统调用宏函数。type name(void)。  
+03. // %0 - eax(__res)，%1 - eax(__NR_##name)。其中name 是系统调用的名称，与 __NR_ 组合形成上面  
+04. // 的系统调用符号常数，从而用来对系统调用表中函数指针寻址。  
+05. // 返回：如果返回值大于等于0，则返回该值，否则置出错号errno，并返回-1。  
+06. #define _syscall0(type,name) /  
+07. type name(void) /  
+08. { /  
+09. long __res; /  
+10. __asm__ volatile ( "int $0x80" /    // 调用系统中断0x80。  
+11. :"=a" (__res) /     // 返回值??eax(__res)。  
+12. :"" (__NR_##name)); /           // 输入为系统中断调用号__NR_name。  
+13.       if (__res >= 0) /      // 如果返回值>=0，则直接返回该值。  
+14.       return (type) __res; errno = -__res; /    // 否则置出错号，并返回-1。  
+15.       return -1;}  
+16. // 有1 个参数的系统调用宏函数。type name(atype a)  
+17. // %0 - eax(__res)，%1 - eax(__NR_name)，%2 - ebx(a)。  
+18. #define _syscall1(type,name,atype,a) /  
+19. type name(atype a) /  
+20. { /  
+21. long __res; /  
+22. __asm__ volatile ( "int $0x80" /  
+23. : "=a" (__res) /  
+24. : "" (__NR_##name), "b" ((long)(a))); /  
+25. if (__res >= 0) /  
+26. return (type) __res; /  
+27. errno = -__res; /  
+28. return -1; /  
+29. }  
+30. // 有2 个参数的系统调用宏函数。type name(atype a, btype b)  
+31. // %0 - eax(__res)，%1 - eax(__NR_name)，%2 - ebx(a)，%3 - ecx(b)。  
+32. #define _syscall2(type,name,atype,a,btype,b) /  
+33. type name(atype a,btype b) /  
+34. { /  
+35. long __res; /  
+36. __asm__ volatile ( "int $0x80" /  
+37. : "=a" (__res) /  
+38. : "" (__NR_##name), "b" ((long)(a)), "c" ((long)(b))); /  
+39. if (__res >= 0) /  
+40. return (type) __res; /  
+41. errno = -__res; /  
+42. return -1; /  
+43. }  
+44. // 有3 个参数的系统调用宏函数。type name(atype a, btype b, ctype c)  
+45. // %0 - eax(__res)，%1 - eax(__NR_name)，%2 - ebx(a)，%3 - ecx(b)，%4 - edx(c)。  
+46. #define _syscall3(type,name,atype,a,btype,b,ctype,c) /  
+47. type name(atype a,btype b,ctype c) /  
+48. { /  
+49. long __res; /  
+50. __asm__ volatile ( "int $0x80" /  
+51. : "=a" (__res) /  
+52. : "" (__NR_##name), "b" ((long)(a)), "c" ((long)(b)), "d" ((long)(c))); /  
+53. if (__res>=0) /  
+54. return (type) __res; /  
+55. errno=-__res; /  
+56. return -1; /  
+57. }  
+
+
