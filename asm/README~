@@ -1,0 +1,41 @@
+1、下载nasm安装包
+
+#wget http://www.nasm.us/pub/nasm/releasebuilds/2.11.08/nasm-2.11.08.tar.gz
+
+2、解压安装nasm
+#tar -xzvf nasm-2.11.08.tar.gz
+#cd nasm-2.11.08
+#./configure
+#make
+#make install
+
+3、编写hello.asm
+4、编译连接
+#nasm -f elf64 hello.asm (linux是64位的，如果是32，请使用elf32)
+#ld -s -o hello hello.o
+#ls hello
+hello
+
+5、执行程序
+#./hello
+Hello, world!
+
+//AT&T S
+as -o helloAT.o helloAT.S
+ld -o helloAT helloAT.o
+
+
+
+as --gstabs -o hello.o hello.s
+ld -o hello hello.o
+执行 as 命令时带上参数 --gstabs 可以告诉汇编器在生成的目标代码中加上符号表，同时需要注意的是，在用 ld 命令进行链接时不要加上 -s 参数，否则目标代码中的符号表在链接时将被删去。
+
+在 GDB 和 DDD 中调试汇编代码和调试 C 语言代码是一样的，你可以通过设置断点来中断程序的运行，查看变量和寄存器的当前值，并可以对代码进行单步跟踪。图1 是在 DDD 中调试汇编代码时的情景：
+
+input:input.o
+ld input.o -o input
+input.o:input.s
+as input.s -o input.o
+
+
+
