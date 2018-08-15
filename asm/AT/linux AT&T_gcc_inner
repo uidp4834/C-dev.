@@ -1,0 +1,973 @@
+经常会在linux内核中看到汇编，而这个汇编又和正常的汇编不太一样，这个就是GCC中的内嵌汇编了。前先天，在移植dvb的frontend的时候看到了mb();这个函数，发现最终其执行的就是
+
+      
+
+
+
+[html] view plaincopy 
+
+• #define barrier  __asm__ __volatile__(“”: : : “memory”)  
+
+
+就是不解其中的意思，网上查查资料才发现是嵌入了汇编。看到asm，相信谁都知道是汇编了，但是，这个有什么作用呢？ldd3中也有解释，那就是内存屏蔽，是为了屏蔽编译器的优化的。但是，什么内存屏蔽，什么编译器优化，都不懂咋办呢？还有这个汇编什么意思都不懂，咋办呢？
+
+还是从头开始吧，万事开头难，从那个汇编代码的意思一步一步下去，总会明白的。个人习惯，要知道代码的意思，跑个程序，边调试边理解，那时最好不过的了。不多说，直接上代码：
+ 
+
+
+[html] view plaincopy 
+
+• #include <stdio.h>  
+• #include <string.h>  
+• #include <stdlib.h>  
+•    
+• #define LOCK_PREFIX ""  
+• #define ADDR (*(volatile struct __dummy *) addr)  
+•    
+• /*__asm__(汇编语句模板: 输出部分: 输入部分: 破坏描述部分)*/  
+•    
+• /*汇编语句模板*/  
+• //语句之间使用“;”、“\n”或“\n\t”分开  
+• //指令中的操作数可以使用占位符引用C语言变量，  
+• //操作数占位符最多10个，名称如下：%0，%1，...，%9  
+•    
+• /*输出部分*/  
+• //输出部分描述输出操作数，不同的操作数描述符之间用逗号格开，  
+• //每个操作数描述符由限定字符串和C语言变量组成。  
+• //每个输出操作数的限定字符串必须包含“=”表示他是一个输出操作数  
+•   
+•  /*输入部分*/  
+• //每个操作数描述符由限定字符串和C语言表达式或者C语言变量组成  
+•    
+• /*破坏描述部分*/  
+• //由逗号格开的字符串组成，每个字符串描述  
+• //一种情况，一般是寄存器名；除寄存器外还有“memory”。  
+• //例如：“%eax”，“%ebx”，“memory”等  
+• static __inline__ void set_bit(int nr, volatile void *addr)  
+• {  
+•      __asm__ __volatile__(LOCK_PREFIX  
+•      "btsl %1, %0" //嵌入的汇编语言指令，btcl为指令操作码，%1,%0是这条指令两个操作数的占位符  
+•       :"=m" (ADDR)  //"输出"操作数  
+•       :"ir" (nr));  //"输入"操作数  
+•   
+• }  
+•    
+• static __inline__ void add(int bb, volatile int *aa)  
+• {  
+•        __asm__ __volatile__(  
+•        "addl %2, %0"  
+•        :"=r" (*aa)  
+•        :"0" (*aa), "g"(bb)  
+•        );  
+• }  
+•   
+• int main()   
+•   
+• {   
+•        int addr = 0xfff0;   
+•        int aa = 1, bb = 2;   
+•        int output, temp;  
+•        int input = 6;  
+•    
+• #if 0  
+•        asm volatile(  
+•               "addl %2, %0"  
+•               :"=r" (aa)  
+•               :"0" (aa), "g"(bb)  
+•        );  
+• #endif  
+•   
+• #if 0  
+•        add(bb, &aa);  
+•        printf("%d\n\n", aa);  
+•          
+•        printf("before: %x\n", addr);  
+•        set_bit(2, &addr);  
+•        printf("after:   %x\n\n", addr);  
+• #endif  
+•    
+• #if 1  
+•        __asm__ __volatile__("movl $0, %%eax;\n\t   \  
+•        movl %%eax, %1;\n\t   \  
+•        movl %2, %%eax;\n\t   \  
+•        movl %%eax, %0;\n\t"   
+•        :"=m"(output),"=m"(temp)    /* output */    
+•        :"r"(input)     /* input */   
+•           //:"eax"     
+•       );    
+•       /*通过破坏描述部分，GCC得知%eax已被使用，因此给 input 分配了%edx。  
+•         在使用内嵌汇编时请记住一点：尽量告诉GCC尽可能多的信息，以防出错*/  
+•       printf("output:       %d\n",output);  
+• #endif  
+•    
+•        return 0;   
+•   
+• }  
+
+
+ 
+
+代码中都有了详细的解释了，相信看了之后，加上跑一把，那么问题都可以迎刃而解了。
+
+这里主要降下，那个
+
+   
+
+
+
+[html] view plaincopy 
+
+• __asm__ __volatile__("movl $0, %%eax;\n\t   \  
+•    movl %%eax, %1;\n\t   \  
+•    movl %2, %%eax;\n\t   \  
+•    movl %%eax, %0;\n\t"   
+•    :"=m"(output),"=m"(temp)    /* output */    
+•    :"r"(input)     /* input */   
+•       //:"eax"     
+•   );    
+
+
+不难看出，这个代码的意思就是 temp=0;output = input;但是如果就是上面的代码的话。那么output永远是0.。
+
+如果把最后一行加上:"eax"的话，那么结果就是对的了。这个就是破坏描述部分的意义所在了。
+
+ 
+
+那么什么是编译器优化呢？
+
+ 
+
+内存访问速度远不及CPU处理速度，为提高机器整体性能，在硬件上引入硬件高速缓存Cache，加速对内存的访问。另外在现代 CPU中指令的执行并不一定严格按照顺序执行，没有相关性的指令可以乱序执行，以充分利用CPU的指令流水线，提高执行速度。
+
+以上是硬件级别的优化。再看软件一级的优化：一种是在编写代码时由程序员优化，另
+
+一种是由编译器进行优化。编译器优化常用的方法有：将内存变量缓存到寄存器；调整指令顺序充分利用CPU指令流水线，常见的是重新排序读写指令。对常规内存进行优化的时候，这些优化是透明的，而且效率很好。由编译器优化或者硬件重新排序引起的问题的解决办法是在从硬件（或者其他处理器）的角度看必须以特定顺序执行的操作之间设置内存屏障（memory barrier），linux提供了一个宏解决编译器的执行顺序问题。
+
+void  barrier(void)
+
+这个函数通知编译器插入一个内存屏障，但对硬件无效，编译后的代码会把当前CPU寄存器中的所有修改过的数值存入内存，需要这些数据的时候再重新从内存中读出。
+
+ 
+
+相信你看这篇文章的话，肯定知道volatile这个关键字，它的意思，就是这个变量随时会被改变，所以不能直接保存在寄存器中，不能被优化，而是要用到就存取。
+
+经常，在一个线程当中，很多内存是共享的，而共享的内存中的数据，随时有被其他的线程所改变。所以有了volatile这个关键字可以帮上很多忙。
+
+而#define barrier  __asm__ __volatile__(“”: : : “memory”)也起到了这个作用。
+
+使用“volatile”也可以达到这个目的，但是我们在每个变量前增加该关键字，不如使用
+
+“memory”方便。
+
+       好了，相信现在，对于为什么用哪个barrier，有了更加详细的了解了吧。
+
+ 
+
+ 
+
+ 
+
+下面贴个AT&T的汇编指令
+
+ 
+
+GAS中每个操作都是有一个字符的后缀，表明操作数的大小。
+
+
+
+
+C声明
+ 
+GAS后缀
+ 
+大小(字节)
+ 
+
+char
+ 
+b
+ 
+1
+ 
+
+short
+ 
+w
+ 
+2
+ 
+
+(unsigned) int / long / char*
+ 
+l
+ 
+4
+ 
+
+float
+ 
+s
+ 
+4
+ 
+
+double
+ 
+l
+ 
+8
+ 
+
+long double
+ 
+t
+ 
+10/12
+ 
+
+
+
+注意：GAL使用后缀“l”同时表示4字节整数和8字节双精度浮点数，这不会产生歧义因为浮点数使用的是完全不同的指令和寄存器。
+
+ 
+
+ 
+
+操作数格式：
+
+
+
+
+格式
+ 
+操作数值
+ 
+名称
+ 
+样例（GAS = C语言）
+ 
+
+$Imm
+ 
+Imm
+ 
+立即数寻址
+ 
+$1 = 1
+ 
+
+Ea
+ 
+R[Ea]
+ 
+寄存器寻址
+ 
+%eax = eax
+ 
+
+Imm
+ 
+M[Imm]
+ 
+绝对寻址
+ 
+0x104 = *0x104
+ 
+
+（Ea）
+ 
+M[R[Ea]]
+ 
+间接寻址
+ 
+（%eax）= *eax
+ 
+
+Imm(Ea)
+ 
+M[Imm+R[Ea]]
+ 
+(基址+偏移量)寻址
+ 
+4(%eax) = *(4+eax)
+ 
+
+（Ea,Eb）
+ 
+M[R[Ea]+R[Eb]]
+ 
+变址
+ 
+(%eax,%ebx) = *(eax+ebx)
+ 
+
+Imm（Ea,Eb）
+ 
+M[Imm+R[Ea]+R[Eb]]
+ 
+寻址
+ 
+9(%eax,%ebx)= *(9+eax+ebx)
+ 
+
+(,Ea,s)
+ 
+M[R[Ea]*s]
+ 
+伸缩化变址寻址
+ 
+(,%eax,4)= *(eax*4)
+ 
+
+Imm(,Ea,s)
+ 
+M[Imm+R[Ea]*s]
+ 
+伸缩化变址寻址
+ 
+0xfc(,%eax,4)= *(0xfc+eax*4)
+ 
+
+(Ea,Eb,s)
+ 
+M(R[Ea]+R[Eb]*s)
+ 
+伸缩化变址寻址
+ 
+(%eax,%ebx,4) = *(eax+ebx*4)
+ 
+
+Imm(Ea,Eb,s)
+ 
+M(Imm+R[Ea]+R[Eb]*s)
+ 
+伸缩化变址寻址
+ 
+8(%eax,%ebx,4) = *(8+eax+ebx*4)
+ 
+
+
+
+注：M[xx]表示在存储器中xx地址的值，R[xx]表示寄存器xx的值，这种表示方法将寄存器、内存都看出一个大数组的形式。
+
+ 
+
+ 
+
+数据传送指令：
+
+
+
+
+指令
+ 
+效果
+ 
+描述
+ 
+
+movl S,D
+ 
+D <-- S
+ 
+传双字
+ 
+
+movw S,D
+ 
+D <-- S
+ 
+传字
+ 
+
+movb S,D
+ 
+D <-- S
+ 
+传字节
+ 
+
+movsbl S,D
+ 
+D <-- 符号扩展S
+ 
+符号位填充(字节->双字)
+ 
+
+movzbl S,D
+ 
+D <-- 零扩展S
+ 
+零填充(字节->双字)
+ 
+
+pushl S
+ 
+R[%esp] <-- R[%esp] – 4;
+
+M[R[%esp]] <-- S
+ 
+压栈
+ 
+
+popl D
+ 
+D <-- M[R[%esp]]；
+
+R[%esp] <-- R[%esp] + 4;
+ 
+出栈
+ 
+
+
+
+注：均假设栈往低地址扩展。
+
+ 
+
+ 
+
+算数和逻辑操作地址：
+
+
+
+
+指令
+ 
+效果
+ 
+描述
+ 
+
+leal S,D
+ 
+D = &S
+ 
+movl地版，S地址入D，D仅能是寄存器
+ 
+
+incl D
+ 
+D++
+ 
+加1
+ 
+
+decl D
+ 
+D--
+ 
+减1
+ 
+
+negl D
+ 
+D = -D
+ 
+取负
+ 
+
+notl D
+ 
+D = ~D
+ 
+取反
+ 
+
+addl S,D
+ 
+D = D + S
+ 
+加
+ 
+
+subl S,D
+ 
+D = D – S
+ 
+减
+ 
+
+imull S,D
+ 
+D = D*S
+ 
+乘
+ 
+
+xorl S,D
+ 
+D = D ^ S
+ 
+异或
+ 
+
+orl S,D
+ 
+D = D | S
+ 
+或
+ 
+
+andl S,D
+ 
+D = D & S
+ 
+与
+ 
+
+sall k,D
+ 
+D = D << k
+ 
+左移
+ 
+
+shll k,D
+ 
+D = D << k
+ 
+左移(同sall)
+ 
+
+sarl k,D
+ 
+D = D >> k
+ 
+算数右移
+ 
+
+shrl k,D
+ 
+D = D >> k
+ 
+逻辑右移
+ 
+
+
+
+ 
+
+ 
+
+特殊算术操作：
+
+
+
+
+指令
+ 
+效果
+ 
+
+imull S
+ 
+R[%edx]:R[%eax] = S * R[%eax]
+ 
+
+mull S
+ 
+R[%edx]:R[%eax] = S * R[%eax]
+ 
+
+cltd S
+ 
+R[%edx]:R[%eax] = 符号位扩展R[%eax]
+ 
+
+idivl S
+ 
+R[%edx] = R[%edx]:R[%eax] % S;
+
+R[%eax] = R[%edx]:R[%eax] / S;
+ 
+
+divl S
+ 
+R[%edx] = R[%edx]:R[%eax] % S;
+
+R[%eax] = R[%edx]:R[%eax] / S;
+ 
+
+
+
+注：64位数通常存储为，高32位放在edx，低32位放在eax。
+
+ 
+
+ 
+
+条件码：
+
+条件码寄存器描述了最近的算数或逻辑操作的属性。
+
+CF：进位标志，最高位产生了进位，可用于检查无符号数溢出。
+
+OF：溢出标志，二进制补码溢出——正溢出或负溢出。
+
+ZF：零标志，结果为0。
+
+SF：符号标志，操作结果为负。
+
+ 
+
+ 
+
+比较指令：
+
+
+
+
+指令
+ 
+基于
+ 
+描述
+ 
+
+cmpb S2,S1
+ 
+S1 – S2
+ 
+比较字节，差关系
+ 
+
+testb S2,S1
+ 
+S1 & S2
+ 
+测试字节，与关系
+ 
+
+cmpw S2,S1
+ 
+S1 – S2
+ 
+比较字，差关系
+ 
+
+testw S2,S1
+ 
+S1 & S2
+ 
+测试字，与关系
+ 
+
+cmpl S2,S1
+ 
+S1 – S2
+ 
+比较双字，差关系
+ 
+
+testl S2,S1
+ 
+S1 & S2
+ 
+测试双字，与关系
+ 
+
+
+
+ 
+
+ 
+
+访问条件码指令：
+
+
+
+
+指令
+ 
+同义名
+ 
+效果
+ 
+设置条件
+ 
+
+sete D
+ 
+setz
+ 
+D = ZF
+ 
+相等/零
+ 
+
+setne D
+ 
+setnz
+ 
+D = ~ZF
+ 
+不等/非零
+ 
+
+sets D
+ 
+ 
+ 
+D = SF
+ 
+负数
+ 
+
+setns D
+ 
+ 
+ 
+D = ~SF
+ 
+非负数
+ 
+
+setg D
+ 
+setnle
+ 
+D = ~(SF ^OF) & ZF
+ 
+大于（有符号>）
+ 
+
+setge D
+ 
+setnl
+ 
+D = ~(SF ^OF)
+ 
+小于等于(有符号>=)
+ 
+
+setl D
+ 
+setnge
+ 
+D = SF ^ OF
+ 
+小于(有符号<)
+ 
+
+setle D
+ 
+setng
+ 
+D = (SF ^ OF) | ZF
+ 
+小于等于(有符号<=)
+ 
+
+seta D
+ 
+setnbe
+ 
+D = ~CF & ~ZF
+ 
+超过(无符号>)
+ 
+
+setae D
+ 
+setnb
+ 
+D = ~CF
+ 
+超过或等于(无符号>=)
+ 
+
+setb D
+ 
+setnae
+ 
+D = CF
+ 
+低于(无符号<)
+ 
+
+setbe D
+ 
+setna
+ 
+D = CF | ZF
+ 
+低于或等于(无符号<=)
+ 
+
+
+
+ 
+
+ 
+
+跳转指令：
+
+
+
+
+指令
+ 
+同义名
+ 
+跳转条件
+ 
+描述
+ 
+
+jmp   Label
+ 
+ 
+ 
+1
+ 
+直接跳转
+ 
+
+jmp   *Operand
+ 
+ 
+ 
+1
+ 
+间接跳转
+ 
+
+je     Label
+ 
+jz
+ 
+ZF
+ 
+等于/零
+ 
+
+jne    Label
+ 
+jnz
+ 
+~ZF
+ 
+不等/非零
+ 
+
+js     Label
+ 
+ 
+ 
+SF
+ 
+负数
+ 
+
+jnz    Label
+ 
+ 
+ 
+~SF
+ 
+非负数
+ 
+
+jg     Label
+ 
+jnle
+ 
+~(SF^OF) & ~ZF
+ 
+大于(有符号>)
+ 
+
+jge    Label
+ 
+jnl
+ 
+~(SF ^ OF)
+ 
+大于等于(有符号>=)
+ 
+
+jl     Label
+ 
+jnge
+ 
+SF ^ OF
+ 
+小于（有符号<）
+ 
+
+jle     Label
+ 
+jng
+ 
+(SF ^ OF) | ZF
+ 
+小于等于(有符号<=)
+ 
+
+ja     Label
+ 
+jnbe
+ 
+~CF & ~ZF
+ 
+超过(无符号>)
+ 
+
+jae    Label
+ 
+jnb
+ 
+~CF
+ 
+超过或等于(无符号>=)
+ 
+
+jb     Label
+ 
+jnae
+ 
+CF
+ 
+低于(无符号<)
+ 
+
+jbe    Label
+ 
+jna
+ 
+CF | ZF
+ 
+低于或等于(无符号<=)
+ 
+
+
+
+ 
+
+ 
+
+转移控制指令：（函数调用）：
+
+
+
+
+指令
+ 
+描述
+ 
+
+call    Label
+ 
+过程调用，返回地址入栈，跳转到调用过程起始处，返回地址是call后面那条指令的地址
+ 
+
+call    *Operand
+ 
+
+leave
+ 
+为返回准备好栈，为ret准备好栈，主要是弹出函数内的栈使用及%ebp
+
+ 
+

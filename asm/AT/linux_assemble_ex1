@@ -1,0 +1,131 @@
+1.打印字符串
+
+
+.section .data
+output:
+     .ascii "this is a test message.\n"
+ output_end:
+     .equ len,output_end - output   #the length of the output string
+ .section .text
+ .globl _start
+
+_start:
+
+    #write system call to print output on screen
+
+    movl $4,%eax
+     movl $1,%ebx
+     movl $output,%ecx
+     movl $len,%edx
+     int $0x80
+    #exit system call
+     movl $1,%eax
+     movl $0,%ebx
+
+    int $0x80
+
+2.获取pid，uid，gid
+
+.section .bss
+     .lcomm pid,4
+     .lcomm uid,4
+     .lcomm gid,4
+ .section .text
+ .globl _start
+ _start:
+     movl $20,%eax
+     int $0x80
+     movl %eax,pid     #系统返回值给了%eax
+
+     movl $24,%eax
+     int $0x80
+     movl %eax,uid
+
+     movl $47,%eax
+     int $0x80
+     movl %eax,gid
+
+ end:
+     movl $1,%eax
+     movl $0,%ebx
+     int $0x80
+
+
+
+
+as -gstabs -o a.o a.s
+
+ld -o a a.o
+
+3.传递结构体
+
+.section .data
+ result:    #结构体头指针
+uptime:
+     .int 0
+ load1:
+     .int 0
+ load5:
+     .int 0
+ load15:
+     .int 0
+ totalram:
+     .int 0
+ freeram:
+     .int 0
+ sharedram:
+     .int 0
+ bufferram:
+     .int 0
+ totalswap:
+     .int 0
+ freeswap:
+     .int 0
+ procs:
+     .byte 0x00,0x00
+ totalhigh:
+     .int 0
+ memunit:
+     .int 0
+ .section .text
+ .globl _start
+ _start:
+     nop
+     movl $result,%ebx   #结构体地址
+    movl $116,%eax
+     int $0x80
+
+     movl $0,%ebx
+     movl $1,%eax
+     int $0x80
+
+
+
+
+4.调用c函数
+
+(1)链接时使用动态加载其，将其和linux上的c库链接到一起
+
+ld -dynamic-linker /lib/ld-linux.so.2 -lc -o a a.o
+
+
+
+
+
+.section .data
+ output:
+     .asciz "this is a test.\n"
+ .section .text
+ .globl _start
+ _start:
+     movl $10,%ecx  #作为打印字符串的计数，loop循环计数
+loop1:
+     pushl %ecx   #将ecx保存起来
+    pushl $output  #传递给printf的参数output
+     call printf
+     addl $4,%esp   #直接找到ecx
+     popl %ecx
+     loop loop1
+     pushl $0
+     call exit
+
